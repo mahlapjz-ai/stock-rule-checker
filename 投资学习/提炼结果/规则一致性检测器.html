@@ -79,13 +79,13 @@ h1 .tag{font-size:12px;font-weight:500;color:var(--accent);background:rgba(59,13
 table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{padding:9px 12px;text-align:left;border-bottom:1px solid #f0f1f3;vertical-align:top}
 th{color:var(--sub);font-weight:600;font-size:12px;background:var(--panel2)}
-td .src{color:var(--dim);font-size:11px}
+td .src{color:var(--sub);font-size:11px}
 .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
 .badge.bull{background:rgba(192,86,86,.12);color:var(--up)}
 .badge.bear{background:rgba(79,154,111,.14);color:var(--down)}
 .badge.neutral{background:rgba(107,114,128,.12);color:var(--sub)}
 .badge.on{background:rgba(192,86,86,.14);color:var(--up)}
-.badge.off{color:var(--dim)}
+.badge.off{color:var(--sub)}
 .badge.na{background:rgba(107,114,128,.12);color:var(--dim)}
 .badge.insuf{background:rgba(201,151,59,.14);color:var(--gold)}
 .badge.pending{background:rgba(201,151,59,.16);color:var(--gold)}
@@ -103,7 +103,8 @@ td .src{color:var(--dim);font-size:11px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:800px){.two{grid-template-columns:1fr}}
 .loading{color:var(--sub);text-align:center;padding:30px}
-.err{color:var(--up);padding:12px;background:rgba(192,86,86,.08);border-radius:10px;margin-top:8px}
+.err{color:var(--up);padding:14px 16px;background:rgba(192,86,86,.05);border-radius:10px;margin-top:8px}
+#status:has(.err)::after{content:'🔍 请在上方输入正确的股票代码（如 sh600036）重新分析';display:block;margin:40px auto 0;max-width:440px;padding:18px 24px;background:var(--panel2);border-radius:12px;color:var(--sub);font-size:13px;text-align:center}
 select{background:#fff;border:1px solid var(--border);color:var(--txt);padding:8px 12px;border-radius:8px;font-size:13px;outline:none}
 .link{color:var(--accent);cursor:pointer;font-size:12px;text-decoration:underline;font-weight:400}
 .link:hover{opacity:.8}
