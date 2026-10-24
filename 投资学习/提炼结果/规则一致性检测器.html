@@ -108,6 +108,37 @@ td .src{color:var(--sub);font-size:11px}
 select{background:#fff;border:1px solid var(--border);color:var(--txt);padding:8px 12px;border-radius:8px;font-size:13px;outline:none}
 .link{color:var(--accent);cursor:pointer;font-size:12px;text-decoration:underline;font-weight:400}
 .link:hover{opacity:.8}
+.pf-section{margin-bottom:4px}
+.pf-label{font-size:13px;font-weight:600;color:var(--sub);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.btn-mini{background:var(--accent);color:#fff;border:none;padding:5px 14px;border-radius:999px;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s ease}
+.btn-mini:hover{opacity:.9}
+.btn-mini.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.watchlist{display:flex;flex-wrap:wrap;gap:10px}
+.wl-item{background:var(--panel2);border-radius:10px;padding:10px 14px;cursor:pointer;min-width:130px;transition:all .15s ease;border:1px solid transparent}
+.wl-item:hover{border-color:var(--accent);box-shadow:var(--shadow-sm)}
+.wl-name{font-size:13px;font-weight:600;color:var(--txt)}
+.wl-price{font-size:16px;font-weight:700}
+.wl-pct{font-size:12px}
+.wl-pct.up{color:var(--up)} .wl-pct.down{color:var(--down)}
+.wl-trig{font-size:11px;color:var(--sub)}
+.pf-holding-inputs{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pf-holding-inputs input{background:#fff;border:1px solid var(--border);color:var(--txt);padding:8px 14px;border-radius:999px;font-size:13px;width:130px;outline:none}
+.pf-holding-inputs input:focus{border-color:var(--accent)}
+#loadingMask{position:fixed;inset:0;background:rgba(245,246,248,.55);display:none;align-items:center;justify-content:center;z-index:999}
+#loadingMask.show{display:flex}
+.spinner{width:44px;height:44px;border:4px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:768px){
+  .cards{grid-template-columns:1fr}
+  .wrap{padding:16px 12px}
+  h1{font-size:19px}
+  #chart{height:320px}
+  .bar{flex-direction:column;align-items:stretch}
+  .bar input{width:100%}
+  .two{grid-template-columns:1fr}
+}
+.err.warn{color:var(--gold);background:rgba(201,151,59,.1);border-left:3px solid var(--gold)}
+#staleNotice{color:var(--gold);background:rgba(201,151,59,.1);border-left:3px solid var(--gold);padding:10px 14px;border-radius:10px;margin:8px 0;font-size:13px}
 </style>
 </head>
 <body>
@@ -117,6 +148,7 @@ select{background:#fff;border:1px solid var(--border);color:var(--txt);padding:8
   <div class="position-note">本工具只检测「当前行情与历史文档规则的一致程度」，不预测未来涨跌；评分是规则触发的一致性度量，不是买卖信号。</div>
 
   <div id="triggerNotice" style="display:none"></div>
+  <div id="staleNotice" style="display:none"></div>
 
   <div class="bar">
     <input id="codeInput" placeholder="输入代码，如 sh600036 / 600036" value="sh600036" />
@@ -129,6 +161,26 @@ select{background:#fff;border:1px solid var(--border);color:var(--txt);padding:8
 
   <!-- 摘要卡片 -->
   <div class="grid cards" id="summaryCards" style="display:none"></div>
+
+  <!-- 持仓与自选 -->
+  <div class="panel" id="portfolioPanel" style="display:none">
+    <h2>持仓与自选 <span class="hint">本地保存 · 不上传</span></h2>
+    <div class="pf-section">
+      <div class="pf-label">自选股 <button class="btn-mini" id="addWatchBtn">+ 加入自选</button></div>
+      <div class="watchlist" id="watchlist"></div>
+    </div>
+    <div class="pf-section" style="margin-top:14px">
+      <div class="pf-label">持仓录入</div>
+      <div class="pf-holding-inputs">
+        <input id="buyPriceInput" type="number" step="0.01" placeholder="买入价" />
+        <input id="buyQtyInput" type="number" step="1" placeholder="买入数量" />
+        <button class="btn-mini" id="saveHoldingBtn">保存持仓</button>
+        <button class="btn-mini ghost" id="clearHoldingBtn" style="display:none">清除持仓</button>
+      </div>
+      <div class="muted" id="holdingInfo" style="margin-top:8px"></div>
+    </div>
+  </div>
+
   <div class="muted" id="scoreNote" style="margin:-4px 0 12px;display:none">本评分为规则一致性指标，非涨跌预测。止损类规则（R002/R005/R008/R022 等）触发代表「持仓应离场」，不代表「未来会跌」。</div>
 
   <!-- 行动清单 -->
@@ -173,6 +225,7 @@ select{background:#fff;border:1px solid var(--border);color:var(--txt);padding:8
 </div>
 
 <div class="footer">免责声明：本工具基于历史文档规则整理，不构成投资建议，历史表现不代表未来。</div>
+<div id="loadingMask"><div class="spinner"></div></div>
 
 <script>
 /* ==================== 规则库（内嵌自 rules.json，含逻辑簇）==================== */
@@ -206,6 +259,19 @@ const RULES = [
 ];
 
 const SCORE_RULE_TOTAL = 14; // 计分规则总数（type=day 的规则池）
+
+/* ==================== 模块三：规则大白话解释 ==================== */
+const RULE_PLAIN = {
+  'R001':'收盘站在5日均线上方且5日线向上，继续持有',
+  'R002':'跌破5日线先减半仓，3天收不回来就清仓',
+  'R003':'上升趋势中回踩5日/10日线获支撑，可低吸',
+  'R004':'短期均线上穿长期均线且长期线走平向上，放量买入',
+  'R005':'短期均线下穿长期均线且长期线走平向下，卖出',
+  'R006':'长期均线向下，股价反弹到它附近就卖',
+  'R007':'MACD在0轴附近金叉且放量，是买点',
+  'R008':'MACD高位死叉或跌破0轴，止损离场',
+  'R022':'跌破60日均线，清仓离场',
+};
 
 /* ==================== 工具函数 ==================== */
 function normCode(raw){
@@ -559,6 +625,16 @@ function cleanCache(){
     Object.keys(localStorage).forEach(k=>{ if(k.startsWith('kline_') && !k.includes(t)) localStorage.removeItem(k); });
   }catch(e){}
 }
+/* ==================== 模块四：稳定性兜底 ==================== */
+let staleCacheUsed = false;
+function getBackupKline(code){
+  try{
+    const v = localStorage.getItem('bak_kline_'+code);
+    if(!v) return null;
+    const arr = JSON.parse(v);
+    return (Array.isArray(arr) && arr.length>0) ? arr : null;
+  }catch(e){ return null; }
+}
 async function fetchKline(code){
   const key = cacheKey(code);
   // 命中当天同时段缓存则直接返回
@@ -569,8 +645,17 @@ async function fetchKline(code){
   const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code},day,,,300,qfq`;
   let resp;
   try{ resp = await fetch(url); }
-  catch(e){ throw new Error('网络请求失败：'+e.message); }
-  if(!resp.ok) throw new Error('HTTP '+resp.status+' '+resp.statusText);
+  catch(e){
+    const old = getBackupKline(code);
+    if(old){ staleCacheUsed = true; return old; }
+    throw new Error('网络请求失败：'+e.message);
+  }
+  if(resp.status===403 || resp.status===429) throw new Error('RATE_LIMIT');
+  if(!resp.ok){
+    const old = getBackupKline(code);
+    if(old){ staleCacheUsed = true; return old; }
+    throw new Error('HTTP '+resp.status+' '+resp.statusText);
+  }
   const json = await resp.json();
   const node = json && json.data && json.data[code];
   const arrRaw = node && (node.qfqday || node.day);
@@ -579,6 +664,7 @@ async function fetchKline(code){
                     .filter(k=>k.close>0 && !isNaN(k.close)); // 剔除无效/停牌填充
   if(!arr.length) throw new Error('K线数据为空');
   try{ localStorage.setItem(key, JSON.stringify(arr)); }catch(e){}
+  try{ localStorage.setItem('bak_kline_'+code, JSON.stringify(arr)); }catch(e){}
   return arr;
 }
 async function fetchRealtime(code){
@@ -641,14 +727,40 @@ function renderSummary(realtime, score, klines){
   const refTag = score.insufficient ? '<span class="mini warn">参考值</span>' : '';
   const sigExtra = score.insufficient ? 'sig-big' : '';
   const insufTip = score.insufficient ? `<div class="muted" style="margin-top:6px">当前仅 ${score.count} 条规则触发，评分幅度反映方向一致性，不反映信号强度。</div>` : '';
+  const code = document.getElementById('codeInput').value;
+  const holding = getHolding(code);
+  let holdingCard = '';
+  if(holding && holding.buyPrice>0 && holding.quantity>0){
+    const pnl = (price - holding.buyPrice) * holding.quantity;
+    const pnlPct = (price - holding.buyPrice) / holding.buyPrice * 100;
+    const pnlCls = pnl>=0 ? 'up' : 'down';
+    holdingCard = `<div class="card"><div class="k">当前持仓盈亏</div><div class="v ${pnlCls}">${pnl>=0?'+':''}${pnl.toFixed(2)}</div><div class="d ${pnlCls}">${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}% · 成本 ${holding.buyPrice} × ${holding.quantity} 股</div></div>`;
+  }
   const el = document.getElementById('summaryCards');
   el.innerHTML = `
     <div class="card"><div class="k">标的</div><div class="v flat">${name}</div><div class="d">${document.getElementById('codeInput').value}</div></div>
     <div class="card"><div class="k">最新价</div><div class="v ${cls}">${price.toFixed(2)}</div><div class="d ${cls}">${pct>=0?'+':''}${pct.toFixed(2)}% · 数据截至 ${lastDate}</div></div>
     <div class="card"><div class="k">多空评分</div><div class="v ${scoreCls}">${score.score>0?'+':''}${score.score} ${refTag}</div><div class="d">平滑区间 -100 ~ +100</div>${insufTip}</div>
-    <div class="card"><div class="k">信号等级</div><div><span class="sig ${score.cls} ${sigExtra}">${score.level}</span></div><div class="d">触发规则 ${score.count} / 计分规则总数 ${SCORE_RULE_TOTAL}</div></div>`;
+    <div class="card"><div class="k">信号等级</div><div><span class="sig ${score.cls} ${sigExtra}">${score.level}</span></div><div class="d">触发规则 ${score.count} / 计分规则总数 ${SCORE_RULE_TOTAL}</div></div>${holdingCard}`;
   el.style.display='grid';
   document.getElementById('scoreNote').style.display='block';
+}
+
+/* ==================== 模块二：图表买卖点标记 ==================== */
+function findTradeMarks(klines){
+  const total = klines.length;
+  const dispLen = Math.min(120, total);
+  const startIdx = total - dispLen;
+  const buys = [], sells = [];
+  for(let j=0; j<dispLen; j++){
+    const fullIdx = startIdx + j;
+    const slice = klines.slice(0, fullIdx+1);
+    const res = evaluateDayRules(slice);
+    const trig = res.filter(r=>r.status==='triggered');
+    if(trig.some(r=>r.id==='R001'||r.id==='R003')) buys.push({j:j, val: slice[slice.length-1].low});
+    if(trig.some(r=>r.id==='R002'||r.id==='R005'||r.id==='R022')) sells.push({j:j, val: slice[slice.length-1].high});
+  }
+  return { buys: buys.slice(-5), sells: sells.slice(-5) };
 }
 
 function renderChart(klines){
@@ -662,6 +774,11 @@ function renderChart(klines){
   const vols = disp.map(k=>k.vol);
   const closes = disp.map(k=>k.close);
   function maArr(n){ return disp.map((_,idx)=>{ const s=idx-n+1; if(s<0) return null; let sum=0; for(let k=s;k<=idx;k++) sum+=closes[k]; return +(sum/n).toFixed(2); }); }
+  const marks = findTradeMarks(klines);
+  const markData = [
+    ...marks.buys.map(x=>({coord:[x.j, x.val], value:'B', itemStyle:{color:'#c05656'}})),
+    ...marks.sells.map(x=>({coord:[x.j, x.val], value:'S', itemStyle:{color:'#4f9a6f'}}))
+  ];
   const opt = {
     backgroundColor:'transparent', animation:false,
     tooltip:{trigger:'axis',axisPointer:{type:'cross'},backgroundColor:'#ffffff',borderColor:'#e5e7eb',textStyle:{color:'#1f2937'}},
@@ -677,7 +794,7 @@ function renderChart(klines){
     ],
     dataZoom:[{type:'inside',xAxisIndex:[0,1],start:0,end:100}],
     series:[
-      {name:'K线',type:'candlestick',data:ohlc,itemStyle:{color:'#c05656',color0:'#4f9a6f',borderColor:'#c05656',borderColor0:'#4f9a6f'}},
+      {name:'K线',type:'candlestick',data:ohlc,itemStyle:{color:'#c05656',color0:'#4f9a6f',borderColor:'#c05656',borderColor0:'#4f9a6f'},markPoint:{symbol:'circle',symbolSize:24,label:{show:true,formatter:'{c}',color:'#fff',fontSize:11,fontWeight:'bold'},data:markData}},
       {name:'MA5',type:'line',data:maArr(5),smooth:true,showSymbol:false,lineStyle:{width:1,color:'#d4a017'}},
       {name:'MA10',type:'line',data:maArr(10),smooth:true,showSymbol:false,lineStyle:{width:1,color:'#3b82f6'}},
       {name:'MA20',type:'line',data:maArr(20),smooth:true,showSymbol:false,lineStyle:{width:1,color:'#8b7bd8'}},
@@ -718,7 +835,7 @@ function renderRules(results, newIds){
     }
     const src = (r.sources||[]).slice(0,2).join('、');
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><b>${r.id}</b> ${r.name}</td>
+    tr.innerHTML = `<td title="${RULE_PLAIN[r.id]||''}"><b>${r.id}</b> ${r.name}</td>
       <td><span class="badge ${dirCls}">${r.direction}</span></td>
       <td>${r.weight}</td>
       <td><span class="cluster">${r.cluster||'—'}</span></td>
@@ -891,6 +1008,11 @@ function renderActionList(results){
     }
     html += `</div>`;
   });
+  // 持仓风险提示
+  const holding = getHolding(document.getElementById('codeInput').value);
+  if(holding && trig.some(r => (r.id==='R002' || r.id==='R022'))){
+    html = `<div class="quote warn">⚠ 持仓注意风险：当前触发止损类规则（R002 跌破5日线 / R022 跌破60日线），请结合持仓成本评估是否减仓/离场。</div>` + html;
+  }
   document.getElementById('actionList').innerHTML = html;
 }
 
@@ -941,6 +1063,8 @@ function renderBacktest(btAll, klines){
 }
 
 /* ==================== 主流程 ==================== */
+function showLoading(){ const m=document.getElementById('loadingMask'); if(m) m.classList.add('show'); }
+function hideLoading(){ const m=document.getElementById('loadingMask'); if(m) m.classList.remove('show'); }
 async function analyze(raw){
   const code = normCode(raw);
   const status = document.getElementById('status');
@@ -948,10 +1072,14 @@ async function analyze(raw){
   document.getElementById('codeInput').value = code;
   status.innerHTML = '<div class="loading">正在拉取行情与K线数据…</div>';
   status.style.display='block';
+  showLoading();
+  staleCacheUsed = false;
   try{
     cleanCache();
     const [klines, realtime] = await Promise.all([fetchKline(code), fetchRealtime(code)]);
     currentKlines = klines;
+    document.getElementById('staleNotice').style.display = staleCacheUsed ? 'block' : 'none';
+    if(staleCacheUsed) document.getElementById('staleNotice').innerHTML = '网络异常，当前显示的是历史缓存数据';
     const dayResults = evaluateDayRules(klines);
     const intraResults = evaluateIntradayRules(klines, realtime, code);
     const contextRules = RULES.filter(r=>r.type==='context').map(r=>({...r, status:'na', detail:'需持仓/大盘上下文数据'}));
@@ -972,22 +1100,31 @@ async function analyze(raw){
     renderHistory(code, currentKlineDate);
     // 功能B：行动清单
     renderActionList(allResults);
+    // 模块一：持仓与自选
+    renderPortfolio(code, realtime, klines, dayResults);
     // 回测剔除盘中/收盘后结算期未完成的最后一根K线，避免未完成的当日数据参与统计
     const sess = getSession();
     const btKlines = ((sess==='intraday' || sess==='post_close') && klines.length>1) ? klines.slice(0, -1) : klines;
     const btAll = backtestAll(btKlines);
     renderBacktest(btAll, btKlines);
+    document.getElementById('portfolioPanel').style.display='block';
     document.getElementById('actionPanel').style.display='block';
     document.getElementById('chartPanel').style.display='block';
     document.getElementById('detailPanel').style.display='block';
     document.getElementById('basisPanel').style.display='block';
     document.getElementById('backtestPanel').style.display='block';
     renderChart(klines);
+    hideLoading();
     status.style.display='none';
   }catch(e){
-    status.innerHTML = `<div class="err">数据获取失败，请稍后重试（错误信息：${e.message}）</div>`;
+    hideLoading();
+    if(e.message === 'RATE_LIMIT'){
+      status.innerHTML = `<div class="err warn">数据请求过于频繁，已触发腾讯接口限流，请 1 分钟后再试。</div>`;
+    } else {
+      status.innerHTML = `<div class="err">数据获取失败，请稍后重试（错误信息：${e.message}）</div>`;
+    }
     status.style.display='block';
-    ['summaryCards','actionPanel','chartPanel','detailPanel','basisPanel','backtestPanel'].forEach(id=>document.getElementById(id).style.display='none');
+    ['summaryCards','portfolioPanel','actionPanel','chartPanel','detailPanel','basisPanel','backtestPanel'].forEach(id=>document.getElementById(id).style.display='none');
     document.getElementById('triggerNotice').style.display='none';
   }
 }
@@ -1040,10 +1177,80 @@ function renderChips(){
   };
 }
 
+/* ==================== 模块一：持仓与自选股 ==================== */
+const WATCHLIST_KEY = 'watchlist';
+function getWatchlist(){ try{ const v=localStorage.getItem(WATCHLIST_KEY); return v?JSON.parse(v):[]; }catch(e){ return []; } }
+function saveWatchlist(list){ try{ localStorage.setItem(WATCHLIST_KEY, JSON.stringify(list)); }catch(e){} }
+function getHolding(code){ try{ const v=localStorage.getItem('holding_'+code); return v?JSON.parse(v):null; }catch(e){ return null; } }
+function saveHolding(code, buyPrice, quantity){ try{ localStorage.setItem('holding_'+code, JSON.stringify({buyPrice:buyPrice, quantity:quantity})); }catch(e){} }
+function clearHolding(code){ try{ localStorage.removeItem('holding_'+code); }catch(e){} }
+function renderPortfolio(code, realtime, klines, dayResults){
+  const panel = document.getElementById('portfolioPanel');
+  panel.style.display = 'block';
+  const price = (realtime && realtime.price) ? realtime.price : klines[klines.length-1].close;
+  const prev = klines.length>1 ? klines[klines.length-2].close : klines[klines.length-1].close;
+  const pct = (realtime && !isNaN(realtime.pct)) ? realtime.pct : ((price-prev)/prev*100);
+  const name = (realtime && realtime.name) ? realtime.name : code;
+  const triggerCount = dayResults.filter(r=>r.status==='triggered').length;
+  let wl = getWatchlist();
+  const inWatch = wl.some(x=>x.code===code);
+  if(inWatch){
+    wl = wl.map(x=> x.code===code ? {code:code,name:name,price:price,pct:pct,triggerCount:triggerCount} : x);
+    saveWatchlist(wl);
+  }
+  const addBtn = document.getElementById('addWatchBtn');
+  addBtn.textContent = inWatch ? '★ 已加入自选' : '+ 加入自选';
+  addBtn.onclick = () => {
+    let list = getWatchlist();
+    if(list.some(x=>x.code===code)){
+      list = list.filter(x=>x.code!==code);
+    } else {
+      list.push({code:code, name:name, price:price, pct:pct, triggerCount:triggerCount});
+    }
+    saveWatchlist(list);
+    renderPortfolio(code, realtime, klines, dayResults);
+  };
+  const wlEl = document.getElementById('watchlist');
+  let wlHtml = '';
+  if(wl.length===0){
+    wlHtml = '<div class="muted">暂无自选，点击「+ 加入自选」把当前股票加入。</div>';
+  } else {
+    wl.forEach(x=>{
+      const pctCls = x.pct>=0?'up':'down';
+      wlHtml += `<div class="wl-item" data-code="${x.code}"><div class="wl-name">${x.name}</div><div class="wl-price">${x.price.toFixed(2)}</div><div class="wl-pct ${pctCls}">${x.pct>=0?'+':''}${x.pct.toFixed(2)}%</div><div class="wl-trig">触发 ${x.triggerCount}</div></div>`;
+    });
+  }
+  wlEl.innerHTML = wlHtml;
+  wlEl.onclick = (e)=>{
+    const item = e.target.closest('.wl-item');
+    if(item && item.dataset.code){ analyze(item.dataset.code); }
+  };
+  const holding = getHolding(code);
+  document.getElementById('buyPriceInput').value = holding ? holding.buyPrice : '';
+  document.getElementById('buyQtyInput').value = holding ? holding.quantity : '';
+  document.getElementById('clearHoldingBtn').style.display = holding ? 'inline-block' : 'none';
+  document.getElementById('holdingInfo').innerHTML = holding ? `当前持仓：买入价 ${holding.buyPrice} × ${holding.quantity} 股` : '';
+}
+
 /* ==================== 事件绑定 ==================== */
 document.getElementById('goBtn').addEventListener('click',()=>analyze(document.getElementById('codeInput').value));
 document.getElementById('codeInput').addEventListener('keydown',e=>{ if(e.key==='Enter') analyze(e.target.value); });
 document.getElementById('refreshLink').addEventListener('click',()=>{ try{ Object.keys(localStorage).forEach(k=>{ if(k.startsWith('kline_')) localStorage.removeItem(k); }); }catch(e){} analyze(document.getElementById('codeInput').value); });
+document.getElementById('saveHoldingBtn').addEventListener('click',()=>{
+  const code = document.getElementById('codeInput').value;
+  const bp = parseFloat(document.getElementById('buyPriceInput').value);
+  const qty = parseFloat(document.getElementById('buyQtyInput').value);
+  if(!code){ return; }
+  if(!(bp>0) || !(qty>0)){ alert('请输入有效的买入价和买入数量'); return; }
+  saveHolding(code, bp, qty);
+  analyze(code);
+});
+document.getElementById('clearHoldingBtn').addEventListener('click',()=>{
+  const code = document.getElementById('codeInput').value;
+  if(!code){ return; }
+  clearHolding(code);
+  analyze(code);
+});
 // 默认加载
 renderChips();
 analyze('sh600036');
