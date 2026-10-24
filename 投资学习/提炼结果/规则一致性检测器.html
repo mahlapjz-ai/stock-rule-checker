@@ -687,6 +687,9 @@ function renderChart(klines){
   // 标注数据截至日期
   const lastDate = klines[klines.length-1].date;
   document.getElementById('chartTitle').innerHTML = `日 K 线（前复权 · 近120交易日）<span class="hint">MA5/10/20/60 · 附成交量 · 数据截至 ${lastDate}</span>`;
+  if(currentChart){
+    requestAnimationFrame(() => { try{ currentChart.resize(); }catch(e){} });
+  }
 }
 
 function renderRules(results, newIds){
@@ -959,7 +962,6 @@ async function analyze(raw){
     const displayName = (realtime && realtime.name) ? realtime.name : code;
     saveRecentStock(code, displayName);
     renderChips();
-    renderChart(klines);
     renderRules(allResults, newIds);
     renderBasis(allResults, score);
     renderTriggerNotice(newIds, baseDate, isFirst, currentKlineDate);
@@ -976,6 +978,7 @@ async function analyze(raw){
     document.getElementById('detailPanel').style.display='block';
     document.getElementById('basisPanel').style.display='block';
     document.getElementById('backtestPanel').style.display='block';
+    renderChart(klines);
     status.style.display='none';
   }catch(e){
     status.innerHTML = `<div class="err">数据获取失败，请稍后重试（错误信息：${e.message}）</div>`;
@@ -1027,9 +1030,9 @@ function renderChips(){
   }
   el.innerHTML = html;
   el.onclick = (e) => {
+    if(e.target.id === 'clearRecentLink'){ clearRecentStocks(); renderChips(); return; }
     const chip = e.target.closest('.chip');
-    if(chip){ analyze(chip.dataset.code); return; }
-    if(e.target.id === 'clearRecentLink'){ clearRecentStocks(); renderChips(); }
+    if(chip && chip.dataset.code){ analyze(chip.dataset.code); return; }
   };
 }
 
