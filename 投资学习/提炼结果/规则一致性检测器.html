@@ -808,11 +808,12 @@ function renderChart(klines){
         },
         tooltip: {
           showRule: 'follow_cross',
-          // 手机端 standard：文字固定从左上角起排（不跟手、不翻转，B/S 标记绘制在其上层不被遮挡）；
-          // 桌面端 rect：白底浮窗跟随十字光标左右翻转
-          showType: window.matchMedia('(max-width: 768px)').matches ? 'standard' : 'rect',
-          text: { color: '#111827', size: 12 },
-          rect: { color: '#FFFFFF', borderColor: '#E5E7EB', borderSize: 1, borderRadius: 6 }
+          // 双端统一 rect 白框。rect.position 默认即 'fixed'：垂直钉在 pane 顶部、水平按触点
+          // 左/右半翻转（realX>width/2 硬编码，v9.6.0 无配置可关）；'pointer' 才是跟随手指，不使用。
+          showType: 'rect',
+          // 手机端字号 11：10 行白框（OHLC+成交量+4条MA）在主图 pane 高度内刚好装下 MA60，12 会裁掉末行
+          text: { color: '#111827', size: window.matchMedia('(max-width: 768px)').matches ? 11 : 12 },
+          rect: { position: 'fixed', offsetLeft: 10, offsetTop: 4, offsetRight: 10, offsetBottom: 8, paddingLeft: 0, paddingRight: 0, paddingTop: 0, paddingBottom: 2, color: '#FFFFFF', borderColor: '#E5E7EB', borderSize: 1, borderRadius: 6 }
         }
       },
       indicator: {
@@ -824,7 +825,7 @@ function renderChart(klines){
           { color: '#8b7bd8' },
           { color: '#0e7490' }
         ],
-        tooltip: { showRule: 'follow_cross', showType: window.matchMedia('(max-width: 768px)').matches ? 'standard' : 'rect', text: { color: '#111827', size: 12 }, rect: { color: '#FFFFFF', borderColor: '#E5E7EB', borderSize: 1, borderRadius: 6 } },
+        tooltip: { showRule: 'follow_cross', showType: 'rect', text: { color: '#111827', size: window.matchMedia('(max-width: 768px)').matches ? 11 : 12 }, rect: { position: 'fixed', offsetLeft: 10, offsetTop: 8, offsetRight: 10, offsetBottom: 8, color: '#FFFFFF', borderColor: '#E5E7EB', borderSize: 1, borderRadius: 6 } },
         lastValueMark: { show: false, text: { show: false } }
       },
       crosshair: {
