@@ -807,8 +807,10 @@ function renderChart(klines){
           last: { upColor: '#c05656', downColor: '#4f9a6f', noChangeColor: '#9ca3af' }
         },
         tooltip: {
-          showRule: window.matchMedia('(max-width: 768px)').matches ? 'none' : 'follow_cross',
-          showType: 'rect',
+          showRule: 'follow_cross',
+          // 手机端 standard：文字固定从左上角起排（不跟手、不翻转，B/S 标记绘制在其上层不被遮挡）；
+          // 桌面端 rect：白底浮窗跟随十字光标左右翻转
+          showType: window.matchMedia('(max-width: 768px)').matches ? 'standard' : 'rect',
           text: { color: '#111827', size: 12 },
           rect: { color: '#FFFFFF', borderColor: '#E5E7EB', borderSize: 1, borderRadius: 6 }
         }
@@ -822,7 +824,7 @@ function renderChart(klines){
           { color: '#8b7bd8' },
           { color: '#0e7490' }
         ],
-        tooltip: { showRule: window.matchMedia('(max-width: 768px)').matches ? 'none' : 'follow_cross', showType: 'rect', text: { color: '#111827', size: 12 }, rect: { color: '#FFFFFF', borderColor: '#E5E7EB', borderSize: 1, borderRadius: 6 } },
+        tooltip: { showRule: 'follow_cross', showType: window.matchMedia('(max-width: 768px)').matches ? 'standard' : 'rect', text: { color: '#111827', size: 12 }, rect: { color: '#FFFFFF', borderColor: '#E5E7EB', borderSize: 1, borderRadius: 6 } },
         lastValueMark: { show: false, text: { show: false } }
       },
       crosshair: {
