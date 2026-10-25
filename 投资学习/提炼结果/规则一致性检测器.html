@@ -5,12 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 <title>规则一致性检测器 · 腾讯自选股</title>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
-<script>
-if (typeof echarts === 'undefined') {
-  document.write('<script src="https://unpkg.com/echarts@5.4.3/dist/echarts.min.js"><\/script>');
-}
-</script>
+<script src="https://cdn.jsdelivr.net/npm/klinecharts/dist/klinecharts.min.js"></script>
 <style>
 :root{
   --bg:#f5f6f8; --panel:#ffffff; --panel2:#f8fafc; --border:#e5e7eb;
@@ -725,108 +720,7 @@ function backtestAll(klines){
 /* ==================== 渲染 ==================== */
 let currentKlines = null;
 let currentChart = null;
-
-/* ==================== 模块：K线移动端手势（长按十字光标） ==================== */
-let klineGestureBound = false;
-const klineGesture = {
-  longPressTimer: null,
-  isLongPress: false,
-  zoomLocked: false,
-  lockStart: 0,
-  lockEnd: 100,
-  startX: 0,
-  startY: 0
-};
-
-// 从源头锁定 dataZoom：长按模式下禁用平移(moveOnMouseMove)与缩放(zoomOnMouseWheel)
-function lockKlineZoom(){
-  if(!currentChart || klineGesture.zoomLocked) return;
-  klineGesture.zoomLocked = true;
-  try{ currentChart.setOption({ dataZoom: [{ moveOnMouseMove: false, zoomOnMouseWheel: false }] }); }catch(err){}
-}
-
-// 解除 dataZoom 锁定：恢复默认平移与缩放
-function unlockKlineZoom(){
-  if(!currentChart || !klineGesture.zoomLocked) return;
-  klineGesture.zoomLocked = false;
-  try{ currentChart.setOption({ dataZoom: [{ moveOnMouseMove: true, zoomOnMouseWheel: true }] }); }catch(err){}
-}
-
-// 手动更新十字光标 + Tooltip：showTip 会联动 cross 光标
-function updateKlineCrosshair(clientX, clientY){
-  if(!currentChart) return;
-  const dom = document.getElementById('chart');
-  if(!dom) return;
-  const rect = dom.getBoundingClientRect();
-  try{
-    currentChart.dispatchAction({ type: 'showTip', x: clientX - rect.left, y: clientY - rect.top });
-  }catch(err){}
-}
-
-// 绑定 K 线触摸手势状态机：默认平移/缩放 → 长按(>250ms)十字光标 → 松手恢复
-function bindKlineGesture(){
-  if(klineGestureBound) return;
-  klineGestureBound = true;
-  const dom = document.getElementById('chart');
-  if(!dom) return;
-
-  dom.addEventListener('touchstart', (e) => {
-    if(e.touches.length !== 1){ unlockKlineZoom(); return; } // 双指：解除锁定，交给原生捏合
-    const t = e.touches[0];
-    klineGesture.startX = t.clientX;
-    klineGesture.startY = t.clientY;
-    klineGesture.isLongPress = false;
-    try{
-      const dz = currentChart.getOption().dataZoom[0];
-      klineGesture.lockStart = dz.start;
-      klineGesture.lockEnd = dz.end;
-    }catch(err){}
-    clearTimeout(klineGesture.longPressTimer);
-    klineGesture.longPressTimer = setTimeout(() => {
-      klineGesture.isLongPress = true; // 进入长按十字光标模式
-      lockKlineZoom();                 // 从源头禁用平移/缩放，彻底分离
-      updateKlineCrosshair(t.clientX, t.clientY);
-    }, 250);
-  }, {passive: true});
-
-  dom.addEventListener('touchmove', (e) => {
-    if(e.touches.length !== 1) return;
-    const t = e.touches[0];
-    if(!klineGesture.isLongPress){
-      // 尚未长按：移动超过阈值即判定为正常滑动，取消长按定时器
-      const dx = t.clientX - klineGesture.startX;
-      const dy = t.clientY - klineGesture.startY;
-      if(Math.abs(dx) > 10 || Math.abs(dy) > 10){
-        clearTimeout(klineGesture.longPressTimer);
-      }
-      return; // 正常平移交给 dataZoom
-    }
-    // 长按十字光标模式：阻止默认 + 锁定视口（每次 move 执行一次对抗） + 更新十字光标
-    e.preventDefault();
-    try{
-      currentChart.dispatchAction({ type: 'dataZoom', start: klineGesture.lockStart, end: klineGesture.lockEnd });
-    }catch(err){}
-    updateKlineCrosshair(t.clientX, t.clientY);
-  }, {passive: false});
-
-  dom.addEventListener('touchend', () => {
-    clearTimeout(klineGesture.longPressTimer);
-    if(klineGesture.isLongPress){
-      try{ currentChart.dispatchAction({ type: 'hideTip' }); }catch(err){}
-    }
-    klineGesture.isLongPress = false;
-    unlockKlineZoom(); // 恢复默认平移/缩放
-  });
-
-  dom.addEventListener('touchcancel', () => {
-    clearTimeout(klineGesture.longPressTimer);
-    if(klineGesture.isLongPress){
-      try{ currentChart.dispatchAction({ type: 'hideTip' }); }catch(err){}
-    }
-    klineGesture.isLongPress = false;
-    unlockKlineZoom(); // 恢复默认平移/缩放
-  });
-}
+let klineResizeBound = false;
 
 function renderSummary(realtime, score, klines){
   const last = klines[klines.length-1];
@@ -876,54 +770,112 @@ function findTradeMarks(klines){
   return { buys: buys.slice(-5), sells: sells.slice(-5) };
 }
 
+function bindKlineResize(){
+  if(klineResizeBound) return;
+  klineResizeBound = true;
+  window.addEventListener('resize', () => {
+    if(currentChart){ try{ currentChart.resize(); }catch(e){} }
+  });
+}
+
 function renderChart(klines){
-  if(typeof echarts === 'undefined'){
-    document.getElementById('chartTitle').innerHTML = `日 K 线 <span class="hint">图表组件加载失败（ECharts CDN 不可用），请检查网络后刷新</span>`;
+  if(typeof klinecharts === 'undefined'){
+    document.getElementById('chartTitle').innerHTML = `日 K 线 <span class="hint">图表组件加载失败（KLineChart CDN 不可用），请检查网络后刷新</span>`;
     return;
   }
-  const disp = klines.slice(-120);
-  const dates = disp.map(k=>k.date);
-  const ohlc = disp.map(k=>[k.open,k.close,k.low,k.high]);
-  const vols = disp.map(k=>k.vol);
-  const closes = disp.map(k=>k.close);
-  function maArr(n){ return disp.map((_,idx)=>{ const s=idx-n+1; if(s<0) return null; let sum=0; for(let k=s;k<=idx;k++) sum+=closes[k]; return +(sum/n).toFixed(2); }); }
+  // 数据转换：腾讯 [date, open, close, high, low, vol] → KLineChart 格式
+  const dataList = klines.map(k => ({
+    timestamp: Date.parse(k.date),
+    open: k.open, high: k.high, low: k.low, close: k.close, volume: k.vol
+  }));
+
+  // 销毁旧实例重建，避免切换股票时 overlay / 指标 / 数据残留
+  if(currentChart){
+    try{ klinecharts.dispose('chart'); }catch(e){}
+    currentChart = null;
+  }
+  currentChart = klinecharts.init('chart', { locale: 'zh-CN' });
+
+  // 浅色主题：红涨绿跌 + 浅网格 + 浅十字光标
+  currentChart.setStyles({
+    grid: {
+      horizontal: { color: '#f0f1f3' },
+      vertical: { color: '#f0f1f3' }
+    },
+    candle: {
+      bar: {
+        upColor: '#c05656', downColor: '#4f9a6f', noChangeColor: '#9ca3af',
+        upBorderColor: '#c05656', downBorderColor: '#4f9a6f', noChangeBorderColor: '#9ca3af',
+        upWickColor: '#c05656', downWickColor: '#4f9a6f', noChangeWickColor: '#9ca3af'
+      },
+      priceMark: {
+        last: { upColor: '#c05656', downColor: '#4f9a6f', noChangeColor: '#9ca3af' }
+      }
+    },
+    indicator: {
+      ohlc: { upColor: 'rgba(192,86,86,.7)', downColor: 'rgba(79,154,111,.7)', noChangeColor: '#9ca3af' },
+      bars: [{ upColor: 'rgba(192,86,86,.7)', downColor: 'rgba(79,154,111,.7)', noChangeColor: '#9ca3af' }],
+      lines: [
+        { color: '#d4a017' },
+        { color: '#3b82f6' },
+        { color: '#8b7bd8' },
+        { color: '#0e7490' }
+      ]
+    },
+    crosshair: {
+      horizontal: { line: { color: '#c9973b' } },
+      vertical: { line: { color: '#c9973b' } }
+    }
+  });
+
+  // 主图指标：MA(5,10,20,60)
+  currentChart.createIndicator({ name: 'MA', calcParams: [5, 10, 20, 60] }, false, { id: 'candle_pane' });
+  // 副图指标：成交量 VOL
+  currentChart.createIndicator('VOL', false, { id: 'volume_pane' });
+
+  // 加载数据
+  currentChart.applyNewData(dataList, false);
+
+  // B/S 买卖点标记（findTradeMarks 的 j 是最近120根内的索引，映射回完整数据的 timestamp）
+  const total = klines.length;
+  const dispLen = Math.min(120, total);
+  const startIdx = total - dispLen;
   const marks = findTradeMarks(klines);
-  const markData = [
-    ...marks.buys.map(x=>({coord:[x.j, x.val], value:'B', itemStyle:{color:'#c05656'}})),
-    ...marks.sells.map(x=>({coord:[x.j, x.val], value:'S', itemStyle:{color:'#4f9a6f'}}))
-  ];
-  const opt = {
-    backgroundColor:'transparent', animation:false,
-    tooltip:{trigger:'axis',axisPointer:{type:'cross'},backgroundColor:'#ffffff',borderColor:'#e5e7eb',textStyle:{color:'#1f2937'}},
-    legend:{data:['K线','MA5','MA10','MA20','MA60'],textStyle:{color:'#6b7280'},top:0},
-    grid:[{left:60,right:20,top:30,height:'58%'},{left:60,right:20,top:'76%',height:'16%'}],
-    xAxis:[
-      {type:'category',data:dates,gridIndex:0,axisLine:{lineStyle:{color:'#e5e7eb'}},axisLabel:{color:'#9ca3af'},boundaryGap:true},
-      {type:'category',data:dates,gridIndex:1,axisLabel:{show:false},axisLine:{lineStyle:{color:'#e5e7eb'}}}
-    ],
-    yAxis:[
-      {scale:true,gridIndex:0,axisLabel:{color:'#9ca3af'},splitLine:{lineStyle:{color:'#f0f1f3'}}},
-      {scale:true,gridIndex:1,axisLabel:{color:'#9ca3af'},splitLine:{show:false}}
-    ],
-    dataZoom:[{type:'inside',xAxisIndex:[0,1],start:0,end:100,moveOnMouseMove:true,zoomOnMouseWheel:true}],
-    series:[
-      {name:'K线',type:'candlestick',data:ohlc,itemStyle:{color:'#c05656',color0:'#4f9a6f',borderColor:'#c05656',borderColor0:'#4f9a6f'},markPoint:{symbol:'circle',symbolSize:24,label:{show:true,formatter:'{c}',color:'#fff',fontSize:11,fontWeight:'bold'},data:markData}},
-      {name:'MA5',type:'line',data:maArr(5),smooth:true,showSymbol:false,lineStyle:{width:1,color:'#d4a017'}},
-      {name:'MA10',type:'line',data:maArr(10),smooth:true,showSymbol:false,lineStyle:{width:1,color:'#3b82f6'}},
-      {name:'MA20',type:'line',data:maArr(20),smooth:true,showSymbol:false,lineStyle:{width:1,color:'#8b7bd8'}},
-      {name:'MA60',type:'line',data:maArr(60),smooth:true,showSymbol:false,lineStyle:{width:1,color:'#0e7490'}},
-      {name:'成交量',type:'bar',xAxisIndex:1,yAxisIndex:1,data:vols,itemStyle:{color:function(p){ const i=p.dataIndex; return disp[i].close>=disp[i].open?'#c05656':'#4f9a6f'; }}}
-    ]
-  };
-  if(!currentChart){ currentChart = echarts.init(document.getElementById('chart')); bindKlineGesture(); }
-  currentChart.setOption(opt, true);
-  currentChart.resize();
+  marks.buys.forEach(x => {
+    const idx = startIdx + x.j;
+    if(idx < 0 || idx >= klines.length) return;
+    currentChart.createOverlay({
+      name: 'simpleAnnotation',
+      points: [{ timestamp: Date.parse(klines[idx].date), value: x.val }],
+      extendData: 'B',
+      styles: { text: { color: '#ffffff', size: 12, backgroundColor: '#c05656', paddingLeft: 4, paddingRight: 4, paddingTop: 2, paddingBottom: 2, borderRadius: 2 } }
+    }, 'candle_pane');
+  });
+  marks.sells.forEach(x => {
+    const idx = startIdx + x.j;
+    if(idx < 0 || idx >= klines.length) return;
+    currentChart.createOverlay({
+      name: 'simpleAnnotation',
+      points: [{ timestamp: Date.parse(klines[idx].date), value: x.val }],
+      extendData: 'S',
+      styles: { text: { color: '#ffffff', size: 12, backgroundColor: '#4f9a6f', paddingLeft: 4, paddingRight: 4, paddingTop: 2, paddingBottom: 2, borderRadius: 2 } }
+    }, 'candle_pane');
+  });
+
   // 标注数据截至日期
   const lastDate = klines[klines.length-1].date;
   document.getElementById('chartTitle').innerHTML = `日 K 线（前复权 · 近120交易日）<span class="hint">MA5/10/20/60 · 附成交量 · 数据截至 ${lastDate}</span>`;
-  if(currentChart){
-    requestAnimationFrame(() => { try{ currentChart.resize(); }catch(e){} });
-  }
+
+  // 自适应：窗口 resize 监听（绑定一次）
+  bindKlineResize();
+
+  // 默认显示最新数据（最近约120根）
+  requestAnimationFrame(() => {
+    try{
+      currentChart.scrollToRealTime();
+      currentChart.resize();
+    }catch(e){}
+  });
 }
 
 function renderRules(results, newIds){
