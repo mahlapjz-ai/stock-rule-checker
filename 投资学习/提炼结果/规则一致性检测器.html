@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 <title>规则一致性检测器 · 腾讯自选股</title>
-<script src="https://cdn.jsdelivr.net/npm/klinecharts/dist/klinecharts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/klinecharts@9.6.0/dist/klinecharts.min.js"></script>
 <style>
 :root{
   --bg:#f5f6f8; --panel:#ffffff; --panel2:#f8fafc; --border:#e5e7eb;
@@ -789,49 +789,47 @@ function renderChart(klines){
     open: k.open, high: k.high, low: k.low, close: k.close, volume: k.vol
   }));
 
-  // 销毁旧实例重建，避免切换股票时 overlay / 指标 / 数据残留
-  if(currentChart){
-    try{ klinecharts.dispose('chart'); }catch(e){}
-    currentChart = null;
-  }
-  currentChart = klinecharts.init('chart', { locale: 'zh-CN' });
-
-  // 浅色主题：红涨绿跌 + 浅网格 + 浅十字光标
-  currentChart.setStyles({
-    grid: {
-      horizontal: { color: '#f0f1f3' },
-      vertical: { color: '#f0f1f3' }
-    },
-    candle: {
-      bar: {
-        upColor: '#c05656', downColor: '#4f9a6f', noChangeColor: '#9ca3af',
-        upBorderColor: '#c05656', downBorderColor: '#4f9a6f', noChangeBorderColor: '#9ca3af',
-        upWickColor: '#c05656', downWickColor: '#4f9a6f', noChangeWickColor: '#9ca3af'
+  // 复用实例：首次才 init + 样式 + 指标；复用则只清除旧 overlay，避免白屏闪烁
+  if(!currentChart){
+    currentChart = klinecharts.init('chart', { locale: 'zh-CN' });
+    // 浅色主题：红涨绿跌 + 浅网格 + 浅十字光标
+    currentChart.setStyles({
+      grid: {
+        horizontal: { color: '#f0f1f3' },
+        vertical: { color: '#f0f1f3' }
       },
-      priceMark: {
-        last: { upColor: '#c05656', downColor: '#4f9a6f', noChangeColor: '#9ca3af' }
+      candle: {
+        bar: {
+          upColor: '#c05656', downColor: '#4f9a6f', noChangeColor: '#9ca3af',
+          upBorderColor: '#c05656', downBorderColor: '#4f9a6f', noChangeBorderColor: '#9ca3af',
+          upWickColor: '#c05656', downWickColor: '#4f9a6f', noChangeWickColor: '#9ca3af'
+        },
+        priceMark: {
+          last: { upColor: '#c05656', downColor: '#4f9a6f', noChangeColor: '#9ca3af' }
+        }
+      },
+      indicator: {
+        ohlc: { upColor: 'rgba(192,86,86,.7)', downColor: 'rgba(79,154,111,.7)', noChangeColor: '#9ca3af' },
+        bars: [{ upColor: 'rgba(192,86,86,.7)', downColor: 'rgba(79,154,111,.7)', noChangeColor: '#9ca3af' }],
+        lines: [
+          { color: '#d4a017' },
+          { color: '#3b82f6' },
+          { color: '#8b7bd8' },
+          { color: '#0e7490' }
+        ]
+      },
+      crosshair: {
+        horizontal: { line: { color: '#c9973b' } },
+        vertical: { line: { color: '#c9973b' } }
       }
-    },
-    indicator: {
-      ohlc: { upColor: 'rgba(192,86,86,.7)', downColor: 'rgba(79,154,111,.7)', noChangeColor: '#9ca3af' },
-      bars: [{ upColor: 'rgba(192,86,86,.7)', downColor: 'rgba(79,154,111,.7)', noChangeColor: '#9ca3af' }],
-      lines: [
-        { color: '#d4a017' },
-        { color: '#3b82f6' },
-        { color: '#8b7bd8' },
-        { color: '#0e7490' }
-      ]
-    },
-    crosshair: {
-      horizontal: { line: { color: '#c9973b' } },
-      vertical: { line: { color: '#c9973b' } }
-    }
-  });
-
-  // 主图指标：MA(5,10,20,60)
-  currentChart.createIndicator({ name: 'MA', calcParams: [5, 10, 20, 60] }, false, { id: 'candle_pane' });
-  // 副图指标：成交量 VOL
-  currentChart.createIndicator('VOL', false, { id: 'volume_pane' });
+    });
+    // 主图指标：MA(5,10,20,60)
+    currentChart.createIndicator({ name: 'MA', calcParams: [5, 10, 20, 60] }, false, { id: 'candle_pane' });
+    // 副图指标：成交量 VOL
+    currentChart.createIndicator('VOL', false, { id: 'volume_pane' });
+  } else {
+    try{ currentChart.removeOverlay(); }catch(e){}
+  }
 
   // 加载数据
   currentChart.applyNewData(dataList, false);
@@ -844,9 +842,11 @@ function renderChart(klines){
   marks.buys.forEach(x => {
     const idx = startIdx + x.j;
     if(idx < 0 || idx >= klines.length) return;
+    const k = klines[idx];
+    const off = (k.high - k.low) * 0.1;
     currentChart.createOverlay({
       name: 'simpleAnnotation',
-      points: [{ timestamp: Date.parse(klines[idx].date), value: x.val }],
+      points: [{ timestamp: Date.parse(klines[idx].date), value: x.val - off }],
       extendData: 'B',
       styles: { text: { color: '#ffffff', size: 12, backgroundColor: '#c05656', paddingLeft: 4, paddingRight: 4, paddingTop: 2, paddingBottom: 2, borderRadius: 2 } }
     }, 'candle_pane');
@@ -854,9 +854,11 @@ function renderChart(klines){
   marks.sells.forEach(x => {
     const idx = startIdx + x.j;
     if(idx < 0 || idx >= klines.length) return;
+    const k = klines[idx];
+    const off = (k.high - k.low) * 0.1;
     currentChart.createOverlay({
       name: 'simpleAnnotation',
-      points: [{ timestamp: Date.parse(klines[idx].date), value: x.val }],
+      points: [{ timestamp: Date.parse(klines[idx].date), value: x.val + off }],
       extendData: 'S',
       styles: { text: { color: '#ffffff', size: 12, backgroundColor: '#4f9a6f', paddingLeft: 4, paddingRight: 4, paddingTop: 2, paddingBottom: 2, borderRadius: 2 } }
     }, 'candle_pane');
