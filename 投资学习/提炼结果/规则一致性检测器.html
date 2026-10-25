@@ -731,13 +731,28 @@ let klineGestureBound = false;
 const klineGesture = {
   longPressTimer: null,
   isLongPress: false,
+  zoomLocked: false,
   lockStart: 0,
   lockEnd: 100,
   startX: 0,
   startY: 0
 };
 
-// 手动更新十字光标（axisPointer）+ 显示 tooltip：showTip 会联动 cross 光标
+// 从源头锁定 dataZoom：长按模式下禁用平移(moveOnMouseMove)与缩放(zoomOnMouseWheel)
+function lockKlineZoom(){
+  if(!currentChart || klineGesture.zoomLocked) return;
+  klineGesture.zoomLocked = true;
+  try{ currentChart.setOption({ dataZoom: [{ moveOnMouseMove: false, zoomOnMouseWheel: false }] }); }catch(err){}
+}
+
+// 解除 dataZoom 锁定：恢复默认平移与缩放
+function unlockKlineZoom(){
+  if(!currentChart || !klineGesture.zoomLocked) return;
+  klineGesture.zoomLocked = false;
+  try{ currentChart.setOption({ dataZoom: [{ moveOnMouseMove: true, zoomOnMouseWheel: true }] }); }catch(err){}
+}
+
+// 手动更新十字光标 + Tooltip：showTip 会联动 cross 光标
 function updateKlineCrosshair(clientX, clientY){
   if(!currentChart) return;
   const dom = document.getElementById('chart');
@@ -748,7 +763,7 @@ function updateKlineCrosshair(clientX, clientY){
   }catch(err){}
 }
 
-// 绑定 K 线触摸手势：单指滑动平移 / 双指捏合缩放 / 单指长按(>250ms)拖动仅切十字光标
+// 绑定 K 线触摸手势状态机：默认平移/缩放 → 长按(>250ms)十字光标 → 松手恢复
 function bindKlineGesture(){
   if(klineGestureBound) return;
   klineGestureBound = true;
@@ -756,7 +771,7 @@ function bindKlineGesture(){
   if(!dom) return;
 
   dom.addEventListener('touchstart', (e) => {
-    if(e.touches.length !== 1) return; // 只处理单指；双指捏合交给 dataZoom 原生缩放
+    if(e.touches.length !== 1){ unlockKlineZoom(); return; } // 双指：解除锁定，交给原生捏合
     const t = e.touches[0];
     klineGesture.startX = t.clientX;
     klineGesture.startY = t.clientY;
@@ -769,6 +784,7 @@ function bindKlineGesture(){
     clearTimeout(klineGesture.longPressTimer);
     klineGesture.longPressTimer = setTimeout(() => {
       klineGesture.isLongPress = true; // 进入长按十字光标模式
+      lockKlineZoom();                 // 从源头禁用平移/缩放，彻底分离
       updateKlineCrosshair(t.clientX, t.clientY);
     }, 250);
   }, {passive: true});
@@ -777,15 +793,15 @@ function bindKlineGesture(){
     if(e.touches.length !== 1) return;
     const t = e.touches[0];
     if(!klineGesture.isLongPress){
-      // 尚未进入长按：手指移动超过阈值即判定为「正常平移」，取消长按定时器
+      // 尚未长按：移动超过阈值即判定为正常滑动，取消长按定时器
       const dx = t.clientX - klineGesture.startX;
       const dy = t.clientY - klineGesture.startY;
       if(Math.abs(dx) > 10 || Math.abs(dy) > 10){
         clearTimeout(klineGesture.longPressTimer);
       }
-      return; // 正常平移交给 dataZoom 处理
+      return; // 正常平移交给 dataZoom
     }
-    // 长按十字光标模式：锁定视口 + 手动移动十字光标
+    // 长按十字光标模式：阻止默认 + 锁定视口（每次 move 执行一次对抗） + 更新十字光标
     e.preventDefault();
     try{
       currentChart.dispatchAction({ type: 'dataZoom', start: klineGesture.lockStart, end: klineGesture.lockEnd });
@@ -799,11 +815,16 @@ function bindKlineGesture(){
       try{ currentChart.dispatchAction({ type: 'hideTip' }); }catch(err){}
     }
     klineGesture.isLongPress = false;
+    unlockKlineZoom(); // 恢复默认平移/缩放
   });
 
   dom.addEventListener('touchcancel', () => {
     clearTimeout(klineGesture.longPressTimer);
+    if(klineGesture.isLongPress){
+      try{ currentChart.dispatchAction({ type: 'hideTip' }); }catch(err){}
+    }
     klineGesture.isLongPress = false;
+    unlockKlineZoom(); // 恢复默认平移/缩放
   });
 }
 
