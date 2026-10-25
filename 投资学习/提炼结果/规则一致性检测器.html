@@ -107,6 +107,9 @@ td .src{color:var(--sub);font-size:11px}
 #status:has(.err)::after{content:'🔍 请在上方输入正确的股票代码（如 sh600036）重新分析';display:block;margin:40px auto 0;max-width:440px;padding:18px 24px;background:var(--panel2);border-radius:12px;color:var(--sub);font-size:13px;text-align:center}
 select{background:#fff;border:1px solid var(--border);color:var(--txt);padding:8px 12px;border-radius:8px;font-size:13px;outline:none}
 .link{color:var(--accent);cursor:pointer;font-size:12px;text-decoration:underline;font-weight:400}
+.data-mgmt{position:fixed;right:16px;bottom:42px;z-index:99;display:flex;gap:14px}
+.data-mgmt .link{color:var(--dim);text-decoration:none}
+.data-mgmt .link:hover{color:var(--sub)}
 .link:hover{opacity:.8}
 .pf-section{margin-bottom:4px}
 .pf-label{font-size:13px;font-weight:600;color:var(--sub);margin-bottom:8px;display:flex;align-items:center;gap:8px}
@@ -177,7 +180,7 @@ select{background:#fff;border:1px solid var(--border);color:var(--txt);padding:8
         <input id="buyPriceInput" type="number" step="0.01" placeholder="买入价" />
         <input id="buyQtyInput" type="number" step="1" placeholder="买入数量" />
         <button class="btn-mini" id="saveHoldingBtn">保存持仓</button>
-        <button class="btn-mini ghost" id="clearHoldingBtn" style="display:none">清除持仓</button>
+        <button class="btn-mini ghost" id="clearHoldingBtn">清空持仓</button>
       </div>
       <div class="muted" id="holdingInfo" style="margin-top:8px"></div>
     </div>
@@ -227,6 +230,11 @@ select{background:#fff;border:1px solid var(--border);color:var(--txt);padding:8
   </div>
 </div>
 
+<div class="data-mgmt">
+  <span class="link" id="exportDataBtn">导出我的数据</span>
+  <span class="link" id="importDataBtn">导入我的数据</span>
+  <input type="file" id="importFileInput" accept=".json,application/json" style="display:none" />
+</div>
 <div class="footer">免责声明：本工具基于历史文档规则整理，不构成投资建议，历史表现不代表未来。</div>
 <div id="loadingMask"><div class="spinner"></div></div>
 
@@ -1312,7 +1320,6 @@ function renderPortfolio(code, realtime, klines, dayResults){
   const holding = getHolding(code);
   document.getElementById('buyPriceInput').value = holding ? holding.buyPrice : '';
   document.getElementById('buyQtyInput').value = holding ? holding.quantity : '';
-  document.getElementById('clearHoldingBtn').style.display = holding ? 'inline-block' : 'none';
   document.getElementById('holdingInfo').innerHTML = holding ? `当前持仓：买入价 ${holding.buyPrice} × ${holding.quantity} 股` : '';
 }
 
@@ -1332,9 +1339,60 @@ document.getElementById('saveHoldingBtn').addEventListener('click',()=>{
 document.getElementById('clearHoldingBtn').addEventListener('click',()=>{
   const code = document.getElementById('codeInput').value;
   if(!code){ return; }
+  const holding = getHolding(code);
+  if(!holding){ alert('当前无持仓记录'); return; }
   clearHolding(code);
+  document.getElementById('buyPriceInput').value = '';
+  document.getElementById('buyQtyInput').value = '';
+  document.getElementById('holdingInfo').innerHTML = '';
   analyze(code);
 });
+/* ==================== 数据导入导出（防丢） ==================== */
+const DATA_KEYS = ['watchlist', 'recent_stocks'];
+function isDataKey(k){
+  return DATA_KEYS.includes(k) || k.startsWith('holding_') || k.startsWith('trigger_log_');
+}
+function exportMyData(){
+  const data = {};
+  try{
+    Object.keys(localStorage).forEach(k => {
+      if(isDataKey(k)){ data[k] = JSON.parse(localStorage.getItem(k)); }
+    });
+  }catch(e){}
+  const d = new Date();
+  const dateStr = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `my_stock_data_${dateStr}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function importMyData(file){
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    let data;
+    try{ data = JSON.parse(e.target.result); }
+    catch(err){ alert('导入失败：文件格式不正确'); return; }
+    try{
+      // 只清空业务数据，保留 kline_ 等缓存
+      Object.keys(localStorage).forEach(k => { if(isDataKey(k)) localStorage.removeItem(k); });
+      Object.keys(data).forEach(k => {
+        if(isDataKey(k)){ localStorage.setItem(k, JSON.stringify(data[k])); }
+      });
+      alert('数据导入成功，即将刷新页面');
+      location.reload();
+    }catch(err){ alert('导入失败：数据写入异常'); }
+  };
+  reader.readAsText(file);
+}
+document.getElementById('exportDataBtn').addEventListener('click', exportMyData);
+document.getElementById('importDataBtn').addEventListener('click', ()=>{ document.getElementById('importFileInput').click(); });
+document.getElementById('importFileInput').addEventListener('change', (e)=>{ if(e.target.files && e.target.files[0]) importMyData(e.target.files[0]); });
+
 // 默认加载
 renderChips();
 analyze('sh600036');

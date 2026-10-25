@@ -14,3 +14,6 @@ __pycache__/
 # 内部记录（不上传）
 投资学习/提炼结果/README.md
 投资学习/提炼结果/验收记录索引.md
+
+# 根目录 README 不上传
+README.md
