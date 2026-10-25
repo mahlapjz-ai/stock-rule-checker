@@ -807,6 +807,7 @@ function renderChart(klines){
           last: { upColor: '#c05656', downColor: '#4f9a6f', noChangeColor: '#9ca3af' }
         },
         tooltip: {
+          showRule: window.matchMedia('(max-width: 768px)').matches ? 'none' : 'follow_cross',
           showType: 'rect',
           text: { color: '#111827', size: 12 },
           rect: { color: '#FFFFFF', borderColor: '#E5E7EB', borderSize: 1, borderRadius: 6 }
@@ -821,7 +822,7 @@ function renderChart(klines){
           { color: '#8b7bd8' },
           { color: '#0e7490' }
         ],
-        tooltip: { showRule: 'follow_cross', showType: 'rect', text: { color: '#111827', size: 12 }, rect: { color: '#FFFFFF', borderColor: '#E5E7EB', borderSize: 1, borderRadius: 6 } },
+        tooltip: { showRule: window.matchMedia('(max-width: 768px)').matches ? 'none' : 'follow_cross', showType: 'rect', text: { color: '#111827', size: 12 }, rect: { color: '#FFFFFF', borderColor: '#E5E7EB', borderSize: 1, borderRadius: 6 } },
         lastValueMark: { show: false, text: { show: false } }
       },
       crosshair: {
@@ -830,7 +831,7 @@ function renderChart(klines){
       }
     });
     // 主图指标：MA(5,10,20,60)；同时给主图 pane 加大上下留白，防止 B/S 标记被边缘裁剪
-    currentChart.createIndicator({ name: 'MA', calcParams: [5, 10, 20, 60] }, false, { id: 'candle_pane', gap: { top: 0.4, bottom: 0.4 } });
+    currentChart.createIndicator({ name: 'MA', calcParams: [5, 10, 20, 60] }, false, { id: 'candle_pane', gap: { top: 0.9, bottom: 0.25 } });
     // 副图指标：成交量 VOL
     currentChart.createIndicator('VOL', false, { id: 'volume_pane' });
   } else {
@@ -849,7 +850,7 @@ function renderChart(klines){
     const idx = startIdx + x.j;
     if(idx < 0 || idx >= klines.length) return;
     const k = klines[idx];
-    const off = (k.high - k.low) * 0.3;
+    const off = (k.high - k.low) * 0.08;
     currentChart.createOverlay({
       name: 'simpleAnnotation',
       points: [{ timestamp: Date.parse(klines[idx].date), value: x.val - off }],
@@ -862,7 +863,7 @@ function renderChart(klines){
     const idx = startIdx + x.j;
     if(idx < 0 || idx >= klines.length) return;
     const k = klines[idx];
-    const off = (k.high - k.low) * 0.3;
+    const off = (k.high - k.low) * 0.08;
     currentChart.createOverlay({
       name: 'simpleAnnotation',
       points: [{ timestamp: Date.parse(klines[idx].date), value: x.val + off }],
