@@ -718,6 +718,87 @@ function backtestAll(klines){
 let currentKlines = null;
 let currentChart = null;
 
+/* ==================== 模块：K线移动端手势（长按十字光标） ==================== */
+let klineGestureBound = false;
+const klineGesture = {
+  longPressTimer: null,
+  isLongPress: false,
+  lockStart: 0,
+  lockEnd: 100,
+  startX: 0,
+  startY: 0
+};
+
+// 手动更新十字光标（axisPointer）+ 显示 tooltip：showTip 会联动 cross 光标
+function updateKlineCrosshair(clientX, clientY){
+  if(!currentChart) return;
+  const dom = document.getElementById('chart');
+  if(!dom) return;
+  const rect = dom.getBoundingClientRect();
+  try{
+    currentChart.dispatchAction({ type: 'showTip', x: clientX - rect.left, y: clientY - rect.top });
+  }catch(err){}
+}
+
+// 绑定 K 线触摸手势：单指滑动平移 / 双指捏合缩放 / 单指长按(>250ms)拖动仅切十字光标
+function bindKlineGesture(){
+  if(klineGestureBound) return;
+  klineGestureBound = true;
+  const dom = document.getElementById('chart');
+  if(!dom) return;
+
+  dom.addEventListener('touchstart', (e) => {
+    if(e.touches.length !== 1) return; // 只处理单指；双指捏合交给 dataZoom 原生缩放
+    const t = e.touches[0];
+    klineGesture.startX = t.clientX;
+    klineGesture.startY = t.clientY;
+    klineGesture.isLongPress = false;
+    try{
+      const dz = currentChart.getOption().dataZoom[0];
+      klineGesture.lockStart = dz.start;
+      klineGesture.lockEnd = dz.end;
+    }catch(err){}
+    clearTimeout(klineGesture.longPressTimer);
+    klineGesture.longPressTimer = setTimeout(() => {
+      klineGesture.isLongPress = true; // 进入长按十字光标模式
+      updateKlineCrosshair(t.clientX, t.clientY);
+    }, 250);
+  }, {passive: true});
+
+  dom.addEventListener('touchmove', (e) => {
+    if(e.touches.length !== 1) return;
+    const t = e.touches[0];
+    if(!klineGesture.isLongPress){
+      // 尚未进入长按：手指移动超过阈值即判定为「正常平移」，取消长按定时器
+      const dx = t.clientX - klineGesture.startX;
+      const dy = t.clientY - klineGesture.startY;
+      if(Math.abs(dx) > 10 || Math.abs(dy) > 10){
+        clearTimeout(klineGesture.longPressTimer);
+      }
+      return; // 正常平移交给 dataZoom 处理
+    }
+    // 长按十字光标模式：锁定视口 + 手动移动十字光标
+    e.preventDefault();
+    try{
+      currentChart.dispatchAction({ type: 'dataZoom', start: klineGesture.lockStart, end: klineGesture.lockEnd });
+    }catch(err){}
+    updateKlineCrosshair(t.clientX, t.clientY);
+  }, {passive: false});
+
+  dom.addEventListener('touchend', () => {
+    clearTimeout(klineGesture.longPressTimer);
+    if(klineGesture.isLongPress){
+      try{ currentChart.dispatchAction({ type: 'hideTip' }); }catch(err){}
+    }
+    klineGesture.isLongPress = false;
+  });
+
+  dom.addEventListener('touchcancel', () => {
+    clearTimeout(klineGesture.longPressTimer);
+    klineGesture.isLongPress = false;
+  });
+}
+
 function renderSummary(realtime, score, klines){
   const last = klines[klines.length-1];
   const prev = klines.length>1 ? klines[klines.length-2] : last;
@@ -795,7 +876,7 @@ function renderChart(klines){
       {scale:true,gridIndex:0,axisLabel:{color:'#9ca3af'},splitLine:{lineStyle:{color:'#f0f1f3'}}},
       {scale:true,gridIndex:1,axisLabel:{color:'#9ca3af'},splitLine:{show:false}}
     ],
-    dataZoom:[{type:'inside',xAxisIndex:[0,1],start:0,end:100,moveOnMouseMove:false,zoomOnMouseWheel:true}],
+    dataZoom:[{type:'inside',xAxisIndex:[0,1],start:0,end:100,moveOnMouseMove:true,zoomOnMouseWheel:true}],
     series:[
       {name:'K线',type:'candlestick',data:ohlc,itemStyle:{color:'#c05656',color0:'#4f9a6f',borderColor:'#c05656',borderColor0:'#4f9a6f'},markPoint:{symbol:'circle',symbolSize:24,label:{show:true,formatter:'{c}',color:'#fff',fontSize:11,fontWeight:'bold'},data:markData}},
       {name:'MA5',type:'line',data:maArr(5),smooth:true,showSymbol:false,lineStyle:{width:1,color:'#d4a017'}},
@@ -805,7 +886,7 @@ function renderChart(klines){
       {name:'成交量',type:'bar',xAxisIndex:1,yAxisIndex:1,data:vols,itemStyle:{color:function(p){ const i=p.dataIndex; return disp[i].close>=disp[i].open?'#c05656':'#4f9a6f'; }}}
     ]
   };
-  if(!currentChart) currentChart = echarts.init(document.getElementById('chart'));
+  if(!currentChart){ currentChart = echarts.init(document.getElementById('chart')); bindKlineGesture(); }
   currentChart.setOption(opt, true);
   currentChart.resize();
   // 标注数据截至日期
