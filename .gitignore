@@ -17,3 +17,6 @@ __pycache__/
 
 # 根目录 README 不上传
 README.md
+
+# 归档目录（旧文件备份，不上传）
+_archive_old/
